@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ui.runner.CucumberTestRunner" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-01-19T09:19:47" hostname="DESKTOP-LGU050V" time="7.978">
+  <properties/>
+  <testcase name="runScenario[0](&quot;Login valid&quot;, &quot;Login SauceDemo&quot;)" classname="ui.runner.CucumberTestRunner" time="7.978"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[Starting ChromeDriver 143.0.7499.192 (be2c1f4fd451578a9ada68a0ac12d659362b44bf-refs/branch-heads/7499@{#4083}) on port 14227
+Only local connections are allowed.
+Please see https://chromedriver.chromium.org/security-considerations for suggestions on keeping ChromeDriver safe.
+ChromeDriver was started successfully on port 14227.
+Jan 19, 2026 4:19:52 PM org.openqa.selenium.remote.ProtocolHandshake createSession
+INFO: Detected dialect: W3C
+]]></system-err>
+</testsuite>
