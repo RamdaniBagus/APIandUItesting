@@ -1,4 +1,3 @@
-
 name: UI And API Testing Workflow
 
 on:
@@ -10,49 +9,45 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    # download repo
     - uses: actions/checkout@v4
 
-    # setup java
-    - name: Set up JDK 11
+    # Setup Java 8
+    - name: Set up JDK 8
       uses: actions/setup-java@v4
       with:
-        java-version: '11'
+        java-version: '8'
         distribution: 'temurin'
         
-    # install browser
+    # Install Chrome (WebDriverManager akan handle compatibility)
     - name: Setup Chrome
       uses: browser-actions/setup-chrome@v2.1.0
-
-    # setup gradlew
+      
     - name: Setup gradlew
       run: chmod +x gradlew
+      
+    # CACHE untuk mempercepat
+    - name: Cache Gradle dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
 
-    # execute gradle command for running cucumber test
-    - name: Execute Test
-      run: ./gradlew test
+    # Run API tests dulu (karena tidak butuh browser)
+    - name: Run API Tests
+      run: |
+        ./gradlew test --tests "api.tests.*" --info
 
-
-
-    # Configure Gradle for optimal use in GitHub Actions, including caching of downloaded dependencies.
-    # See: https://github.com/gradle/actions/blob/main/setup-gradle/README.md
-    #- name: Setup Gradle
-    #  uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
-
-    #- name: Build with Gradle Wrapper
-    #  run: ./gradlew build
-
-    # NOTE: The Gradle Wrapper is the default and recommended way to run Gradle (https://docs.gradle.org/current/userguide/gradle_wrapper.html).
-    # If your project does not have the Gradle Wrapper configured, you can use the following configuration to run Gradle with a specified version.
-    #
-    # - name: Setup Gradle
-    #   uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
-    #   with:
-    #     gradle-version: '8.9'
-    #
-    # - name: Build with Gradle 8.9
-    #   run: gradle build
+    # Run UI tests dengan konfigurasi khusus
+    - name: Run UI Tests
+      run: |
+        ./gradlew test --tests "ui.runner.*" \
+          -Dwebdriver.chrome.args="--headless,--no-sandbox,--disable-dev-shm-usage" \
+          --info \
+          --stacktrace
