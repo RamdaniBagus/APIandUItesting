@@ -18,7 +18,7 @@ public class GetUserTest {
                 given()
                         .header("x-api-key", ApiConfig.API_KEY)
                         .when()
-                        .get("/users?page=2")
+                        .get("/user?page=2")
                         .then()
                         .statusCode(200)
                         .extract()
