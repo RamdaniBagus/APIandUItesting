@@ -1,4 +1,5 @@
-Automation Testing Project
+**Automation Testing Project** 
+
 📋 Overview
 This is a comprehensive automation testing project that combines both API and UI testing using modern testing tools and frameworks. The project follows a structured approach with separate modules for API and UI testing.
 🚀 Technologies Used
