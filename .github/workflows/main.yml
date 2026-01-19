@@ -44,10 +44,22 @@ jobs:
       run: |
         ./gradlew test --tests "api.tests.*" --info
 
-    # Run UI tests dengan konfigurasi khusus
+    # Run UI tests dengan environment variable
     - name: Run UI Tests
+      env:
+        GITHUB_ACTIONS: "true"  # Tambahkan ini
+        CI: "true"              # Dan ini
       run: |
-        ./gradlew test --tests "ui.runner.*" \
-          -Dwebdriver.chrome.args="--headless,--no-sandbox,--disable-dev-shm-usage" \
+        ./gradlew clean test --tests "ui.runner.CucumberTestRunner" \
           --info \
           --stacktrace
+      
+    # Upload test reports jika gagal
+    - name: Upload test reports
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-reports
+        path: |
+          build/reports/tests/
+          target/cucumber-report/
