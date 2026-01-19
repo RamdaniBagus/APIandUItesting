@@ -8,29 +8,27 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  ui-tests:
     runs-on: ubuntu-latest
+    name: 🎨 UI Tests
 
     steps:
     - uses: actions/checkout@v4
 
-    # Setup Java 8
     - name: Set up JDK 8
       uses: actions/setup-java@v4
       with:
         java-version: '8'
         distribution: 'temurin'
         
-    # Install Chrome (WebDriverManager akan handle compatibility)
     - name: Setup Chrome
       uses: browser-actions/setup-chrome@v2.1.0
       
     - name: Setup gradlew
       run: chmod +x gradlew
       
-    # CACHE untuk mempercepat - UPDATE KE v4
     - name: Cache Gradle dependencies
-      uses: actions/cache@v4  # UPDATE: v3 -> v4
+      uses: actions/cache@v4
       with:
         path: |
           ~/.gradle/caches
@@ -39,21 +37,50 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    # Run tests
-    - name: Run Tests
+    - name: Run UI Tests
       env:
         GITHUB_ACTIONS: "true"
         CI: "true"
       run: |
-        ./gradlew clean test --info --stacktrace
-      
-    # Upload test reports jika gagal - UPDATE KE v4
-    - name: Upload test reports
-      if: failure()  # atau always() jika ingin selalu upload
-      uses: actions/upload-artifact@v4  # UPDATE: v3 -> v4
+        echo "🚀 Menjalankan UI Tests..."
+        ./gradlew clean test --tests "ui.runner.CucumberTestRunner" --info
+  
+  api-tests:
+    runs-on: ubuntu-latest
+    name: 🔌 API Tests
+    needs: ui-tests  # Jalankan setelah UI tests sukses
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 8
+      uses: actions/setup-java@v4
       with:
-        name: test-reports
+        java-version: '8'
+        distribution: 'temurin'
+      
+    - name: Setup gradlew
+      run: chmod +x gradlew
+
+    - name: Run API Tests
+      env:
+        API_KEY: ${{ secrets.REQRES_API_KEY || 'reqres-free-v1' }}
+      run: |
+        echo "🔑 API Key: ${API_KEY:0:3}***${API_KEY: -4}"
+        echo "🚀 Menjalankan API Tests..."
+        
+        # Jalankan API tests
+        ./gradlew clean test --tests "api.tests.*" --info --stacktrace || {
+          echo "❌ API tests gagal"
+          exit 1
+        }
+      
+    - name: Upload API test reports
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: api-test-reports
         path: |
-          build/reports/tests/
-          target/cucumber-report/
-        retention-days: 7  # opsional: simpan 7 hari saja
+          build/reports/tests/test/classes/api.tests.GetUserTest.html
+          build/test-results/test/
+        retention-days: 7
