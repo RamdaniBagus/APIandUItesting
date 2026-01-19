@@ -10,11 +10,19 @@ import utils.DriverFactory;
 
 public class LoginSteps {
 
-    WebDriver driver = DriverFactory.getDriver();
-    LoginPage loginPage = new LoginPage(driver);
+    // JANGAN INISIALISASI DI SINI - ini penyebab error
+    WebDriver driver;
+    LoginPage loginPage;
+
+    // Constructor kosong WAJIB
+    public LoginSteps() {
+        // Biarkan kosong
+    }
 
     @Given("user open login page")
     public void openLoginPage() {
+        driver = DriverFactory.getDriver();
+        loginPage = new LoginPage(driver);
         loginPage.open();
     }
 
