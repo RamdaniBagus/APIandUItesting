@@ -28,9 +28,9 @@ jobs:
     - name: Setup gradlew
       run: chmod +x gradlew
       
-    # CACHE untuk mempercepat
+    # CACHE untuk mempercepat - UPDATE KE v4
     - name: Cache Gradle dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4  # UPDATE: v3 -> v4
       with:
         path: |
           ~/.gradle/caches
@@ -39,27 +39,21 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    # Run API tests dulu (karena tidak butuh browser)
-    - name: Run API Tests
-      run: |
-        ./gradlew test --tests "api.tests.*" --info
-
-    # Run UI tests dengan environment variable
-    - name: Run UI Tests
+    # Run tests
+    - name: Run Tests
       env:
-        GITHUB_ACTIONS: "true"  # Tambahkan ini
-        CI: "true"              # Dan ini
+        GITHUB_ACTIONS: "true"
+        CI: "true"
       run: |
-        ./gradlew clean test --tests "ui.runner.CucumberTestRunner" \
-          --info \
-          --stacktrace
+        ./gradlew clean test --info --stacktrace
       
-    # Upload test reports jika gagal
+    # Upload test reports jika gagal - UPDATE KE v4
     - name: Upload test reports
-      if: failure()
-      uses: actions/upload-artifact@v3
+      if: failure()  # atau always() jika ingin selalu upload
+      uses: actions/upload-artifact@v4  # UPDATE: v3 -> v4
       with:
         name: test-reports
         path: |
           build/reports/tests/
           target/cucumber-report/
+        retention-days: 7  # opsional: simpan 7 hari saja
