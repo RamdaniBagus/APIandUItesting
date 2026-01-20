@@ -37,13 +37,19 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
-    - name: Run UI Tests with Allure
+    - name: Run UI Tests
       env:
         GITHUB_ACTIONS: "true"
         CI: "true"
       run: |
-        echo "🚀 Menjalankan UI Tests dengan Allure..."
-        ./gradlew clean test allureReport --tests "ui.runner.CucumberTestRunner" --info
+        echo "🚀 Menjalankan UI Tests..."
+        ./gradlew clean test --tests "ui.runner.CucumberTestRunner" --info
+      
+    - name: Generate Allure Report for UI Tests
+      if: always()
+      run: |
+        echo "📊 Generating Allure Report for UI Tests..."
+        ./gradlew allureReport
       
     - name: Upload UI Test Reports
       if: always()
@@ -63,16 +69,25 @@ jobs:
         echo "## 🎨 UI Test Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
+        # Initialize variables
+        TOTAL_TESTS=0
+        FAILED_TESTS=0
+        
         if [ -d "build/test-results/test" ]; then
-          TOTAL_TESTS=$(find build/test-results/test -name "*.xml" -exec grep -h "testsuite" {} \; | grep -o 'tests="[^"]*"' | sed 's/tests="//' | sed 's/"//' | awk '{sum+=$1} END {print sum}')
-          FAILED_TESTS=$(find build/test-results/test -name "*.xml" -exec grep -h "testsuite" {} \; | grep -o 'failures="[^"]*"' | sed 's/failures="//' | sed 's/"//' | awk '{sum+=$1} END {print sum}')
-          
-          if [ -z "$TOTAL_TESTS" ]; then
-            TOTAL_TESTS=0
-          fi
-          if [ -z "$FAILED_TESTS" ]; then
-            FAILED_TESTS=0
-          fi
+          # Count tests from XML files
+          for xml_file in build/test-results/test/*.xml; do
+            if [ -f "$xml_file" ]; then
+              TESTS=$(grep -o 'tests="[^"]*"' "$xml_file" | head -1 | sed 's/tests="//' | sed 's/"//')
+              FAILURES=$(grep -o 'failures="[^"]*"' "$xml_file" | head -1 | sed 's/failures="//' | sed 's/"//')
+              
+              # Convert to numbers, default to 0 if empty
+              TESTS=${TESTS:-0}
+              FAILURES=${FAILURES:-0}
+              
+              TOTAL_TESTS=$((TOTAL_TESTS + TESTS))
+              FAILED_TESTS=$((FAILED_TESTS + FAILURES))
+            fi
+          done
           
           PASSED_TESTS=$((TOTAL_TESTS - FAILED_TESTS))
           
@@ -93,10 +108,9 @@ jobs:
         
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "📁 **Reports available for download in Artifacts section:**" >> $GITHUB_STEP_SUMMARY
-        echo "- HTML Reports: \`build/reports/tests/test/\`" >> $GITHUB_STEP_SUMMARY
-        echo "- Allure Report: \`build/reports/allure-report/\`" >> $GITHUB_STEP_SUMMARY
-        echo "- JUnit XML: \`build/test-results/test/\`" >> $GITHUB_STEP_SUMMARY
-        echo "- Allure Results: \`build/allure-results/\`" >> $GITHUB_STEP_SUMMARY
+        echo "- HTML Reports: \`ui-test-reports/reports/tests/test/\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Allure Report: \`ui-test-reports/reports/allure-report/\`" >> $GITHUB_STEP_SUMMARY
+        echo "- JUnit XML: \`ui-test-reports/test-results/test/\`" >> $GITHUB_STEP_SUMMARY
   
   api-tests:
     runs-on: ubuntu-latest
@@ -128,14 +142,14 @@ jobs:
         fi
         echo "BASE_URL=https://reqres.in/api" >> $GITHUB_ENV
 
-    - name: Run API Tests with Allure
+    - name: Run API Tests
       run: |
         echo "🔑 API Key: ${API_KEY:0:3}***${API_KEY: -4}"
         echo "🌐 Base URL: $BASE_URL"
-        echo "🚀 Menjalankan API Tests dengan Allure..."
+        echo "🚀 Menjalankan API Tests..."
         
-        # Jalankan test dan generate allure report sekaligus
-        ./gradlew clean test allureReport --tests "api.tests.*" --info --stacktrace
+        # Jalankan API tests saja
+        ./gradlew clean test --tests "api.tests.*" --info --stacktrace
         
         # Check exit code
         if [ $? -eq 0 ]; then
@@ -143,6 +157,12 @@ jobs:
         else
           echo "❌ API tests failed, but continuing with report generation"
         fi
+      
+    - name: Generate Allure Report for API Tests
+      if: always()
+      run: |
+        echo "📊 Generating Allure Report for API Tests..."
+        ./gradlew allureReport
       
     - name: Generate API Test Summary
       if: always()
@@ -163,26 +183,40 @@ jobs:
         if [ -d "build/test-results/test" ]; then
           TOTAL_TESTS=0
           FAILED_TESTS=0
+          SKIPPED_TESTS=0
           
           for xml_file in build/test-results/test/*.xml; do
             if [ -f "$xml_file" ]; then
-              TESTS=$(grep -o 'tests="[^"]*"' "$xml_file" | sed 's/tests="//' | sed 's/"//')
-              FAILURES=$(grep -o 'failures="[^"]*"' "$xml_file" | sed 's/failures="//' | sed 's/"//')
+              TESTS=$(grep -o 'tests="[^"]*"' "$xml_file" | head -1 | sed 's/tests="//' | sed 's/"//')
+              FAILURES=$(grep -o 'failures="[^"]*"' "$xml_file" | head -1 | sed 's/failures="//' | sed 's/"//')
+              SKIPPED=$(grep -o 'skipped="[^"]*"' "$xml_file" | head -1 | sed 's/skipped="//' | sed 's/"//')
+              
+              # Convert to numbers, default to 0 if empty
+              TESTS=${TESTS:-0}
+              FAILURES=${FAILURES:-0}
+              SKIPPED=${SKIPPED:-0}
               
               TOTAL_TESTS=$((TOTAL_TESTS + TESTS))
               FAILED_TESTS=$((FAILED_TESTS + FAILURES))
+              SKIPPED_TESTS=$((SKIPPED_TESTS + SKIPPED))
             fi
           done
           
-          PASSED_TESTS=$((TOTAL_TESTS - FAILED_TESTS))
+          PASSED_TESTS=$((TOTAL_TESTS - FAILED_TESTS - SKIPPED_TESTS))
           
           echo "## Test Results" >> $SUMMARY_FILE
           echo "- **Total Tests:** $TOTAL_TESTS" >> $SUMMARY_FILE
           echo "- **Passed Tests:** $PASSED_TESTS" >> $SUMMARY_FILE
           echo "- **Failed Tests:** $FAILED_TESTS" >> $SUMMARY_FILE
+          echo "- **Skipped Tests:** $SKIPPED_TESTS" >> $SUMMARY_FILE
           
           if [ $TOTAL_TESTS -gt 0 ]; then
-            echo "- **Success Rate:** $((PASSED_TESTS * 100 / TOTAL_TESTS))%" >> $SUMMARY_FILE
+            if [ $PASSED_TESTS -gt 0 ]; then
+              SUCCESS_RATE=$((PASSED_TESTS * 100 / TOTAL_TESTS))
+              echo "- **Success Rate:** $SUCCESS_RATE%" >> $SUMMARY_FILE
+            else
+              echo "- **Success Rate:** 0%" >> $SUMMARY_FILE
+            fi
           else
             echo "- **Success Rate:** 0%" >> $SUMMARY_FILE
           fi
@@ -194,7 +228,9 @@ jobs:
             for xml_file in build/test-results/test/*.xml; do
               if [ -f "$xml_file" ] && grep -q "failure" "$xml_file"; then
                 TEST_NAME=$(basename "$xml_file" .xml | sed 's/TEST-//')
-                echo "- $TEST_NAME" >> $SUMMARY_FILE
+                FAILURE_COUNT=$(grep -o 'failures="[^"]*"' "$xml_file" | head -1 | sed 's/failures="//' | sed 's/"//')
+                FAILURE_COUNT=${FAILURE_COUNT:-0}
+                echo "- **$TEST_NAME** ($FAILURE_COUNT failures)" >> $SUMMARY_FILE
               fi
             done
           fi
@@ -204,8 +240,10 @@ jobs:
           echo "## 📋 All Test Files" >> $SUMMARY_FILE
           for xml_file in build/test-results/test/*.xml; do
             if [ -f "$xml_file" ]; then
+              FILE_SIZE=$(stat -c%s "$xml_file" 2>/dev/null || stat -f%z "$xml_file" 2>/dev/null || echo "0")
+              HUMAN_SIZE=$(numfmt --to=iec --suffix=B $FILE_SIZE 2>/dev/null || echo "${FILE_SIZE}B")
               TEST_NAME=$(basename "$xml_file" .xml | sed 's/TEST-//')
-              echo "- $TEST_NAME.xml" >> $SUMMARY_FILE
+              echo "- $TEST_NAME.xml ($HUMAN_SIZE)" >> $SUMMARY_FILE
             fi
           done
         else
@@ -217,7 +255,11 @@ jobs:
         echo "📦 Creating report archive..."
         cd build
         if [ -d "reports" ] || [ -d "test-results" ] || [ -d "allure-results" ]; then
-          zip -r api-test-reports.zip reports/ test-results/ allure-results/ api-test-summary.md 2>/dev/null || echo "Warning: Could not create zip archive"
+          zip -r api-test-reports.zip reports/ test-results/ allure-results/ api-test-summary.md 2>/dev/null || {
+            echo "Warning: Could not create zip archive"
+            # Create tar as fallback
+            tar -czf api-test-reports.tar.gz reports/ test-results/ allure-results/ api-test-summary.md 2>/dev/null || true
+          }
         fi
         cd ..
       
@@ -232,6 +274,7 @@ jobs:
           build/allure-results/
           build/api-test-summary.md
           build/api-test-reports.zip
+          build/api-test-reports.tar.gz
         retention-days: 30
         if-no-files-found: warn
 
@@ -243,17 +286,18 @@ jobs:
         
         if [ -f "build/api-test-summary.md" ]; then
           # Extract test results section
-          grep -A 6 "## Test Results" build/api-test-summary.md | tail -5 >> $GITHUB_STEP_SUMMARY
+          echo "📊 **Test Summary:**" >> $GITHUB_STEP_SUMMARY
+          grep -E "^- \*\*(Total|Passed|Failed|Skipped) Tests|^- \*\*Success Rate" build/api-test-summary.md >> $GITHUB_STEP_SUMMARY
         else
           echo "📊 **Status:** Report generation in progress..." >> $GITHUB_STEP_SUMMARY
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "📁 **Download API Test Reports:**" >> $GITHUB_STEP_SUMMARY
-        echo "- Complete Archive: \`api-test-reports/api-test-reports.zip\`" >> $GITHUB_STEP_SUMMARY
-        echo "- HTML Reports: \`api-test-reports/reports/tests/test/\`" >> $GITHUB_STEP_SUMMARY
-        echo "- Test Summary: \`api-test-reports/api-test-summary.md\`" >> $GITHUB_STEP_SUMMARY
-        echo "- Allure Report: \`api-test-reports/reports/allure-report/\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Complete Archive: \`api-test-reports.zip\` or \`api-test-reports.tar.gz\`" >> $GITHUB_STEP_SUMMARY
+        echo "- HTML Reports: \`reports/tests/test/\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Test Summary: \`api-test-summary.md\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Allure Report: \`reports/allure-report/\`" >> $GITHUB_STEP_SUMMARY
   
   generate-combined-report:
     runs-on: ubuntu-latest
@@ -288,13 +332,17 @@ jobs:
         # Copy UI reports
         if [ -d "ui-reports" ]; then
           echo "📂 Copying UI reports..."
-          cp -r ui-reports/* combined-report/ui/ 2>/dev/null || true
+          find ui-reports -type f -name "*.html" -o -name "*.xml" -o -name "*.json" -o -name "*.md" | head -20 | while read file; do
+            cp --parents "$file" combined-report/ui/ 2>/dev/null || true
+          done
         fi
         
         # Copy API reports
         if [ -d "api-reports" ]; then
           echo "📂 Copying API reports..."
-          cp -r api-reports/* combined-report/api/ 2>/dev/null || true
+          find api-reports -type f -name "*.html" -o -name "*.xml" -o -name "*.json" -o -name "*.md" | head -20 | while read file; do
+            cp --parents "$file" combined-report/api/ 2>/dev/null || true
+          done
         fi
         
         # Create simple index.html
@@ -361,6 +409,12 @@ jobs:
                     font-size: 0.9em;
                     margin-bottom: 20px;
                 }
+                pre {
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 5px;
+                    overflow-x: auto;
+                }
             </style>
         </head>
         <body>
@@ -371,38 +425,52 @@ jobs:
                 <div class="section ui-section">
                     <h2>🎨 UI Test Reports</h2>
                     <div class="summary">
-                        <p>UI test execution completed. Download reports from the Artifacts section.</p>
+                        <p>UI test execution completed. Download full reports from GitHub Actions Artifacts.</p>
                     </div>
                     <div>
-                        <a href="ui/" class="report-link">📁 Open UI Reports</a>
-                        <a href="ui/reports/allure-report/" class="report-link">📊 View Allure Report</a>
+                        <a href="ui/reports/allure-report/index.html" class="report-link" target="_blank">📊 View Allure Report</a>
+                        <a href="ui/reports/tests/test/index.html" class="report-link" target="_blank">📄 View HTML Report</a>
                     </div>
                 </div>
                 
                 <div class="section api-section">
                     <h2>🔌 API Test Reports</h2>
                     <div class="summary">
-                        <p>API test execution completed. Download reports from the Artifacts section.</p>
+                        <p>API test execution completed. Download full reports from GitHub Actions Artifacts.</p>
                     </div>
                     <div>
-                        <a href="api/" class="report-link">📁 Open API Reports</a>
-                        <a href="api/reports/allure-report/" class="report-link">📊 View Allure Report</a>
+                        <a href="api/reports/allure-report/index.html" class="report-link" target="_blank">📊 View Allure Report</a>
+                        <a href="api/reports/tests/test/index.html" class="report-link" target="_blank">📄 View HTML Report</a>
+                        <a href="api/api-test-summary.md" class="report-link" target="_blank">📋 View Summary</a>
                     </div>
                 </div>
                 
                 <div class="section">
-                    <h2>📋 How to Download Reports</h2>
+                    <h2>📋 How to Download Full Reports</h2>
                     <ol>
-                        <li>Go to GitHub Actions tab</li>
+                        <li>Go to GitHub Actions tab in your repository</li>
                         <li>Click on this workflow run</li>
                         <li>Scroll to the "Artifacts" section</li>
                         <li>Download the artifacts you need:
                             <ul>
-                                <li><strong>ui-test-reports</strong> - UI test results</li>
-                                <li><strong>api-test-reports</strong> - API test results</li>
+                                <li><strong>ui-test-reports</strong> - Complete UI test results</li>
+                                <li><strong>api-test-reports</strong> - Complete API test results</li>
+                                <li><strong>combined-test-reports</strong> - This combined report</li>
                             </ul>
                         </li>
                     </ol>
+                </div>
+                
+                <div class="section">
+                    <h2>⚡ Quick Commands</h2>
+                    <pre>
+# Download all artifacts using GitHub CLI
+gh run download $RUN_ID
+
+# Or download specific artifact
+gh run download $RUN_ID -n ui-test-reports
+gh run download $RUN_ID -n api-test-reports
+                    </pre>
                 </div>
             </div>
         </body>
@@ -411,7 +479,10 @@ jobs:
         
         # Create zip archive
         echo "📦 Creating combined report archive..."
-        zip -r combined-test-reports.zip combined-report/
+        zip -r combined-test-reports.zip combined-report/ 2>/dev/null || {
+          echo "Creating tar.gz as fallback..."
+          tar -czf combined-test-reports.tar.gz combined-report/ 2>/dev/null || true
+        }
 
     - name: Upload Combined Report
       if: always()
@@ -421,6 +492,7 @@ jobs:
         path: |
           combined-report/
           combined-test-reports.zip
+          combined-test-reports.tar.gz
         retention-days: 30
 
     - name: Generate Final Summary
@@ -432,28 +504,24 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📁 Available Reports in Artifacts:" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Artifact | Description | Size |" >> $GITHUB_STEP_SUMMARY
-        echo "|----------|-------------|------|" >> $GITHUB_STEP_SUMMARY
         
-        # Calculate sizes (approximate)
+        # Check and list available reports
         if [ -d "ui-reports" ]; then
-          UI_SIZE=$(du -sh ui-reports | cut -f1)
-          echo "| 🎨 **ui-test-reports** | UI test results with Allure reports | $UI_SIZE |" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎨 **ui-test-reports** - Complete UI test results with Allure reports" >> $GITHUB_STEP_SUMMARY
         fi
         
         if [ -d "api-reports" ]; then
-          API_SIZE=$(du -sh api-reports | cut -f1)
-          echo "| 🔌 **api-test-reports** | API test results with Allure reports | $API_SIZE |" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔌 **api-test-reports** - Complete API test results with detailed summary" >> $GITHUB_STEP_SUMMARY
         fi
         
-        if [ -f "combined-test-reports.zip" ]; then
-          COMBINED_SIZE=$(du -h combined-test-reports.zip | cut -f1)
-          echo "| 📊 **combined-test-reports** | All reports combined in one archive | $COMBINED_SIZE |" >> $GITHUB_STEP_SUMMARY
+        if [ -d "combined-report" ]; then
+          echo "- 📊 **combined-test-reports** - Combined report with quick access links" >> $GITHUB_STEP_SUMMARY
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### ⚡ Quick Links:" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "1. **[Download All Reports](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})**" >> $GITHUB_STEP_SUMMARY
-        echo "2. View test execution logs for debugging" >> $GITHUB_STEP_SUMMARY
-        echo "3. Check individual test results in the HTML reports" >> $GITHUB_STEP_SUMMARY
+        echo "2. View detailed execution logs for debugging" >> $GITHUB_STEP_SUMMARY
+        echo "3. Check HTML reports for visual test results" >> $GITHUB_STEP_SUMMARY
+        echo "4. View Allure reports for interactive test analysis" >> $GITHUB_STEP_SUMMARY
